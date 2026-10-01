@@ -7,7 +7,11 @@ from pathlib import Path
 from maintlog.agent import run_agent
 from maintlog.backends import Replay
 from maintlog.decision_schema import ARGS
-from maintlog.extraction import STATUS_GUIDANCE, validate_fields
+from maintlog.extraction import (
+    STATUS_GUIDANCE,
+    has_unnegated_status_cue,
+    validate_fields,
+)
 from maintlog.ingestion import load_csv, load_profile
 from maintlog.scope import Scope
 
@@ -84,7 +88,9 @@ class StatusRecoveryTests(unittest.TestCase):
                 {"tool": "finish", "args": {"record_ids": ["WO-02"]}},
             ]
         )
-        feedback = contexts[4]["observations"][-1]["result"]
+        self.assertIn("extraction_record", contexts[4])
+        self.assertIn("validation_feedback", contexts[4])
+        feedback = contexts[4]["validation_feedback"]
         self.assertEqual(feedback["rejected_decision"], rejected)
         self.assertIn("tried or attempted", feedback["error"])
         self.assertIn("Do not repeat", feedback["retry_instruction"])
@@ -109,3 +115,82 @@ class StatusRecoveryTests(unittest.TestCase):
         self.assertFalse(report["trace"][1]["repeated_invalid_decision"])
         self.assertTrue(report["trace"][2]["repeated_invalid_decision"])
         self.assertEqual(report["extraction_proposals"], [])
+
+    def test_clause_local_status_negation(self):
+
+        cases = [
+            ("Tried to tighten VLV-82; work could not be completed", "attempted", True),
+            (
+                "Tried to tighten VLV-82; work could not be completed",
+                "completed",
+                False,
+            ),
+            ("Did not attempt to tighten VLV-82", "attempted", False),
+            ("Never tried to tighten VLV-82", "attempted", False),
+            ("Did not replace PMP-55", "completed", False),
+            ("Replaced FAN-93; repair success not confirmed", "completed", True),
+            ("Replaced FAN-93; repair success not confirmed", "verified", False),
+            ("Replacement of FLT-64 verified by inspection", "verified", True),
+        ]
+        for text, status, expected in cases:
+            with self.subTest(text=text, status=status):
+                self.assertEqual(has_unnegated_status_cue(text, status), expected)
+
+    def test_empty_finish_progress_requires_history_aggregate(self):
+        report, contexts = self.run_decisions(
+            [
+                {"tool": "search", "args": {"query": "xyznotfound"}},
+                {"tool": "aggregate", "args": {}},
+                {"tool": "finish", "args": {"record_ids": []}},
+            ]
+        )
+        self.assertFalse(contexts[1]["workflow_progress"]["empty_finish_eligible"])
+        self.assertTrue(contexts[2]["workflow_progress"]["empty_finish_eligible"])
+        self.assertEqual(report["status"], "no_matches")
+
+    def test_progress_tracks_inspection_and_extraction(self):
+        report, contexts = self.run_decisions(
+            [
+                {"tool": "search", "args": {"query": "vibration"}},
+                {"tool": "record", "args": {"record_id": "WO-02"}},
+                self.extract("completed"),
+                {"tool": "abstain", "args": {"reason": "Regression fixture"}},
+            ]
+        )
+
+        # After retrieval, inspection and extraction are still pending.
+        progress = contexts[1]["workflow_progress"]
+        self.assertIn("WO-02", progress["pending_candidate_inspection"])
+        self.assertIn("WO-02", progress["pending_candidate_extraction"])
+
+        # Inspection schedules a focused extraction for this source record.
+        focused = contexts[2]
+        self.assertEqual(focused["extraction_record"]["record_id"], "WO-02")
+        source = next(record for record in self.records if record.record_id == "WO-02")
+        self.assertEqual(
+            focused["extraction_record"],
+            {
+                "record_id": source.record_id,
+                "component": source.component,
+                "issue_raw": source.issue_raw,
+                "action_raw": source.action_raw,
+                "narrative_raw": source.narrative_raw,
+            },
+        )
+        self.assertNotIn("workflow_progress", focused)
+        self.assertNotIn("validation_feedback", focused)
+
+        # After acceptance, ordinary tool selection resumes.
+        progress = contexts[3]["workflow_progress"]
+        self.assertNotIn("WO-02", progress["pending_candidate_inspection"])
+        self.assertNotIn("WO-02", progress["pending_candidate_extraction"])
+        self.assertEqual(report["status"], "abstained")
+        self.assertEqual(
+            [step["decision_stage"] for step in report["trace"]],
+            [
+                "tool_selection",
+                "tool_selection",
+                "focused_extraction",
+                "tool_selection",
+            ],
+        )
