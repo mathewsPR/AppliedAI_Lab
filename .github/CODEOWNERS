@@ -1,0 +1,7 @@
+# Merge into existing rules; preserve unrelated and shared-file owners.
+/maintlog-intelligence/ @mathewsPR
+/.github/workflows/maintlog-ci.yml @mathewsPR
+/.github/ISSUE_TEMPLATE/maintlog_bug.yml @mathewsPR
+/.github/ISSUE_TEMPLATE/maintlog_feature.yml @mathewsPR
+/.github/PULL_REQUEST_TEMPLATE/maintlog.md @mathewsPR
+# Append @mathewsPR to existing owners on shared Dependabot/policy rules.
