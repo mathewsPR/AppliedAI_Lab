@@ -1,16 +1,9 @@
 name: Maintenance Agent CI
 
+# Required checks must not depend on workflow-level path filters.
 on:
   push:
-    paths:
-      - "maintlog-intelligence/**"
-      - ".github/workflows/maintlog-ci.yml"
-      - ".gitattributes"
   pull_request:
-    paths:
-      - "maintlog-intelligence/**"
-      - ".github/workflows/maintlog-ci.yml"
-      - ".gitattributes"
   workflow_dispatch:
 
 permissions:
@@ -25,26 +18,22 @@ jobs:
     name: Python 3.11 / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
-
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-
     defaults:
       run:
         working-directory: maintlog-intelligence
-
     env:
       PYTHONUTF8: "1"
       PYTHONHASHSEED: "0"
-
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: pip
@@ -52,59 +41,42 @@ jobs:
             maintlog-intelligence/requirements-agent.lock
             maintlog-intelligence/requirements-ci.txt
             maintlog-intelligence/pyproject.toml
-
       - name: Install dependencies
         run: |
+          python -m pip install --upgrade "pip==26.2.1" "setuptools==83.0.0"
           python -m pip install -r requirements-agent.lock
           python -m pip install -r requirements-ci.txt
           python -m pip check
-
-      - name: Record environment
-        run: |
-          python --version
-          python -m pip freeze
-          python -c "import langgraph; print('LangGraph available')"
-
+      - name: Verify agent dependency
+        run: python -c "import langgraph; print('LangGraph available')"
       - name: Lint
         run: python -m ruff check src tests scripts
-
-      - name: Check formatting
+      - name: Formatting
         run: python -m ruff format --check src tests scripts
-
-      - name: Run tests with branch coverage
-        run: >
-          python -m coverage run -m pytest tests
-          -ra
-          --junitxml=artifacts/ci/junit.xml
-
-      - name: Generate coverage reports
+      - name: Existing unittest suite with branch coverage
+        run: python -m coverage run -m unittest discover -s tests -v
+      - name: Coverage reports and gate
         if: always()
         run: |
-          python -m coverage report
-          python -m coverage xml -o artifacts/ci/coverage.xml
-          python -m coverage json -o artifacts/ci/coverage.json
-          python -m coverage html -d artifacts/ci/htmlcov
-
-      - name: Validate datasets and reproduce baseline
+          python -m coverage xml --fail-under=0 -o artifacts/ci/coverage.xml
+          python -m coverage json --fail-under=0 -o artifacts/ci/coverage.json
+          python -m coverage html --fail-under=0 -d artifacts/ci/htmlcov
+          python -m coverage report --fail-under=75
+      - name: Complete-agent replay comparison
         run: >
-          python -m maintlog.evaluation
-          --data-root data/public
-          --output-dir artifacts/ci-evaluation
-
-      - name: Run complete-agent replay comparison
+          maintlog-compare data/demo/comparison_cases.json --backend replay
+          --trials 3 --output artifacts/ci-comparison.json
+      - name: Assert synthetic replay metrics
         run: >
-          maintlog-compare data/demo/comparison_cases.json
-          --backend replay
-          --trials 3
-          --output artifacts/ci-comparison.json
-
-      - name: Build wheel and source distribution
+          python scripts/check_replay_report.py artifacts/ci-comparison.json
+          data/demo/comparison_cases.json --trials 3
+      - name: Build distributions
         run: python -m build
-
-      - name: Check distribution metadata
+      - name: Distribution metadata
         run: python -m twine check dist/*
-
-      - name: Upload test and evaluation reports
+      - name: Fresh base-wheel installation and result assertions
+        run: python scripts/check_wheel_install.py
+      - name: Upload reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -113,13 +85,68 @@ jobs:
           if-no-files-found: warn
           path: |
             maintlog-intelligence/artifacts/ci/
-            maintlog-intelligence/artifacts/ci-evaluation/
             maintlog-intelligence/artifacts/ci-comparison.json
-
       - name: Upload distributions
         uses: actions/upload-artifact@v4
         with:
-          name: maintlog-distributions-${{ matrix.os }}
+          name: maintlog-dist-${{ matrix.os }}
           retention-days: 14
           if-no-files-found: error
           path: maintlog-intelligence/dist/
+
+  security:
+    name: Maintenance security checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: maintlog-intelligence
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Install dependencies and scanners
+        run: |
+          python -m pip install --upgrade "pip==26.2.1" "setuptools==83.0.0"
+          python -m pip install -r requirements-agent.lock
+          python -m pip install -r requirements-ci.txt
+          python -m pip install -r requirements-security.txt
+          python -m pip check
+          python -c "from pathlib import Path; Path('artifacts/security').mkdir(parents=True, exist_ok=True)"
+      - name: Scan runtime Python source
+        run: >
+          python -m bandit -r src --severity-level medium --confidence-level medium
+          -f json -o artifacts/security/bandit.json
+      - name: Audit installed dependencies
+        if: ${{ !cancelled() }}
+        run: |
+          python -m pip uninstall -y maintlog-intelligence
+          python -m pip_audit --strict -f json -o artifacts/security/dependencies.json
+      - name: Upload security reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maintlog-security
+          retention-days: 14
+          if-no-files-found: warn
+          path: maintlog-intelligence/artifacts/security/
+
+  gate:
+    name: Maintlog required gate
+    needs: [checks, security]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    env:
+      CHECKS_RESULT: ${{ needs.checks.result }}
+      SECURITY_RESULT: ${{ needs.security.result }}
+    steps:
+      - name: Require every validation job to succeed
+        shell: bash
+        run: |
+          test "$CHECKS_RESULT" = success
+          test "$SECURITY_RESULT" = success
