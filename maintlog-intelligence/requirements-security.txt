@@ -1,3 +1,0 @@
-# Direct scanner pins from the reviewed proposal.
-bandit==1.8.3
-pip-audit==2.9.0

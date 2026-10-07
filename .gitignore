@@ -1,0 +1,4 @@
+
+# Retained local Maintlog files; standalone repository owns the code.
+/maintlog-intelligence/*
+!/maintlog-intelligence/README.md
