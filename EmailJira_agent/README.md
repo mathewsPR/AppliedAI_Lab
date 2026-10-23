@@ -2,7 +2,7 @@
 
 One planned local Windows Python application: Gmail intake, one bounded LangChain/Ollama agent, Jira order/application tracking and human review, exact-version approval before outgoing email, daily digest and safe recovery.
 
-**Current state:** Phase 0 documentation complete and self-reviewed. Application implementation has not started. No install/run commands, integrations, database, executable tests, CI or release are available yet. No live mail is read or sent by these documents. Phase 1 will create a runnable Python 3.12/uv foundation in small explainable steps.
+**Current state:** **Current state:** Phase 0 documentation is complete and self-reviewed. Phase 1 is in progress. A Python 3.12 package and diagnostic CLI are available. Gmail, Jira, model integration, database startup, and sending are not implemented. No live mail is read or sent.
 
 ## Reading order
 
@@ -14,3 +14,19 @@ One planned local Windows Python application: Gmail intake, one bounded LangChai
 6. [Standards](docs/standards.md) and [development rules](AGENTS.md)
 
 The three user-supplied source documents remain unchanged. No empty future modules or extra infrastructure are created. See Phase 0 validation for selected defaults versus actual account/provider facts still needed. User acceptance of later features and live sending is separate from document completion.
+
+## Current development commands
+
+Run these from `EmailJira_agent` using Git Bash:
+
+```bash
+uv sync --locked
+uv run --locked mail-jira-agent --help
+uv run --locked mail-jira-agent --version
+uv run --locked pytest -q
+uv run --locked ruff format --check src tests
+uv run --locked ruff check src tests
+uv run --locked mypy src
+```
+
+Running the CLI without arguments currently exits with an error because no operational command has been delivered yet.
