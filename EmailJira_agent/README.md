@@ -56,3 +56,8 @@ the features that use them. The CLI does not initialize a database yet.
 Released migration files must not be edited. Add a new numbered migration for
 future schema changes. Database startup, upgrade backup, and restore procedures
 are still pending.
+
+`single_instance()` holds a Windows file lock inside the runtime directory.
+A second process using that directory is rejected. Windows releases the lock
+after normal exit or process termination; the lock file itself may remain.
+The CLI does not acquire the lock yet.
