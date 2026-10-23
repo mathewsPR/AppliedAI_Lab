@@ -61,3 +61,20 @@ are still pending.
 A second process using that directory is rejected. Windows releases the lock
 after normal exit or process termination; the lock file itself may remain.
 The CLI does not acquire the lock yet.
+
+## Initialize the foundation
+
+From Git Bash in `EmailJira_agent`, create the account-local directory and
+copy the safe example configuration:
+
+```bash
+runtime_dir="$(cygpath -u "$LOCALAPPDATA")/MailJiraAgent"
+mkdir -p "$runtime_dir"
+cp -n config.example.toml "$runtime_dir/config.toml"
+uv run --locked mail-jira-agent init
+```
+
+`cp -n` preserves an existing configuration. Inspect it before changing it.
+Successful initialization creates `state.db` and an `instance.lock` file under
+`%LOCALAPPDATA%\MailJiraAgent\`. Repeating `init` is safe. Gmail, Jira, Ollama,
+and sending are unavailable at this stage.

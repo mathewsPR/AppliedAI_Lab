@@ -91,3 +91,71 @@ def test_module_entry_point(
 
     assert result.value.code == 0
     assert "mail-jira-agent 0.1.0" in capsys.readouterr().out
+
+
+def test_init_creates_database_and_is_repeatable(tmp_path: Path) -> None:
+    runtime_root = tmp_path / "isolated-local-appdata" / "MailJiraAgent"
+    runtime_root.mkdir(parents=True)
+    (runtime_root / "config.toml").write_text(
+        '[application]\nmode = "foundation"\nsending_enabled = false\n',
+        encoding="utf-8",
+    )
+
+    first = run_cli(["init"], runtime_root.parent)
+    second = run_cli(["init"], runtime_root.parent)
+
+    assert first.returncode == 0, first.stderr
+    assert second.returncode == 0, second.stderr
+    assert "Foundation database initialized." in first.stdout
+    assert (runtime_root / "state.db").is_file()
+
+    import sqlite3
+
+    with sqlite3.connect(runtime_root / "state.db") as connection:
+        assert connection.execute(
+            "SELECT version FROM schema_migrations"
+        ).fetchall() == [(1,)]
+
+
+def test_init_rejects_invalid_config_before_database_write(tmp_path: Path) -> None:
+    runtime_root = tmp_path / "isolated-local-appdata" / "MailJiraAgent"
+    runtime_root.mkdir(parents=True)
+    (runtime_root / "config.toml").write_text(
+        '[application]\nmode = "foundation"\nsending_enabled = true\n',
+        encoding="utf-8",
+    )
+
+    result = run_cli(["init"], runtime_root.parent)
+
+    assert result.returncode != 0
+    assert "Sending is unavailable" in result.stderr
+    assert not (runtime_root / "state.db").exists()
+
+
+def test_init_missing_config_does_not_create_database(tmp_path: Path) -> None:
+    runtime_root = tmp_path / "isolated-local-appdata" / "MailJiraAgent"
+    runtime_root.mkdir(parents=True)
+
+    result = run_cli(["init"], runtime_root.parent)
+
+    assert result.returncode != 0
+    assert "Cannot read the configuration file" in result.stderr
+    assert "Foundation database initialized" not in result.stdout
+    assert not (runtime_root / "state.db").exists()
+
+
+def test_init_reports_database_failure_without_success(tmp_path: Path) -> None:
+    runtime_root = tmp_path / "isolated-local-appdata" / "MailJiraAgent"
+    runtime_root.mkdir(parents=True)
+    (runtime_root / "config.toml").write_text(
+        '[application]\nmode = "foundation"\nsending_enabled = false\n',
+        encoding="utf-8",
+    )
+    (runtime_root / "state.db").mkdir()
+
+    result = run_cli(["init"], runtime_root.parent)
+
+    assert result.returncode != 0
+    assert "Cannot open the local database" in result.stderr
+    assert "Foundation database initialized" not in result.stdout
+    assert (runtime_root / "state.db").is_dir()
