@@ -4,7 +4,9 @@ version = "0.1.0"
 description = "Local Gmail-to-Jira assistant with human-controlled actions"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
-dependencies = []
+dependencies = [
+    "pywin32>=312 ; sys_platform == 'win32'",
+]
 
 [project.scripts]
 mail-jira-agent = "mail_jira_agent.__main__:main"
@@ -19,6 +21,7 @@ dev = [
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
     "ruff>=0.17.2",
+    "types-pywin32>=312.0.0.20261006",
 ]
 
 [tool.ruff]
