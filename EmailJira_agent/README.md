@@ -30,3 +30,15 @@ uv run --locked mypy src
 ```
 
 Running the CLI without arguments currently exits with an error because no operational command has been delivered yet.
+
+## Foundation configuration
+
+`config.example.toml` documents the settings currently accepted by
+`mail_jira_agent.config.load_config()`:
+
+- `mode` must be `"foundation"`.
+- `sending_enabled` must be `false`.
+
+The loader rejects malformed files, missing or extra settings, and attempts to
+enable unavailable behavior. The CLI does not load configuration yet; operational
+startup will be added later in Phase 1. Do not put credentials in this file.
