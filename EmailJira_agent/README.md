@@ -45,3 +45,14 @@ startup will be added later in Phase 1. Do not put credentials in this file.
 
 `initialize_runtime_root()` creates the directory and revalidates it afterward.
 The CLI does not invoke it yet, and account ACL protection has not been verified.
+
+## Local database foundation
+
+`open_database()` opens a SQLite connection with foreign-key enforcement.
+`apply_migrations()` applies numbered migrations in one transaction. The initial
+migration creates only `schema_migrations`; business tables are added alongside
+the features that use them. The CLI does not initialize a database yet.
+
+Released migration files must not be edited. Add a new numbered migration for
+future schema changes. Database startup, upgrade backup, and restore procedures
+are still pending.
