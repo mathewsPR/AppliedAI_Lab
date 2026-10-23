@@ -5,7 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from mail_jira_agent.runtime_paths import RuntimePathError, resolve_runtime_root
+from mail_jira_agent.runtime_paths import (
+    RuntimePathError,
+    initialize_runtime_root,
+    resolve_runtime_root,
+)
 
 
 def test_runtime_path_uses_local_app_data(
@@ -82,3 +86,32 @@ def test_runtime_junction_is_rejected(
         resolve_runtime_root()
 
     assert not (outside / "MailJiraAgent").exists()
+
+
+def test_initialize_runtime_root_is_repeatable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    account_root = tmp_path / "Account Data ü"
+    account_root.mkdir()
+    monkeypatch.setenv("LOCALAPPDATA", str(account_root))
+
+    first = initialize_runtime_root()
+    second = initialize_runtime_root()
+
+    assert first == second == account_root.resolve() / "MailJiraAgent"
+    assert first.is_dir()
+
+
+def test_runtime_path_occupied_by_file_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    account_root = tmp_path / "account"
+    account_root.mkdir()
+    runtime_root = account_root / "MailJiraAgent"
+    runtime_root.write_text("untouched", encoding="utf-8")
+    monkeypatch.setenv("LOCALAPPDATA", str(account_root))
+
+    with pytest.raises(RuntimePathError, match="Cannot create"):
+        initialize_runtime_root()
+
+    assert runtime_root.read_text(encoding="utf-8") == "untouched"

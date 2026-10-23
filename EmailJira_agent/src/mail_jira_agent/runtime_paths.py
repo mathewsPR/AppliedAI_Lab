@@ -36,3 +36,19 @@ def resolve_runtime_root() -> Path:
         raise RuntimePathError("The runtime directory escapes LOCALAPPDATA.")
 
     return runtime_root
+
+
+def initialize_runtime_root() -> Path:
+    """Create and revalidate the account-local runtime directory."""
+    runtime_root = resolve_runtime_root()
+
+    try:
+        runtime_root.mkdir(exist_ok=True)
+    except OSError as exc:
+        raise RuntimePathError("Cannot create the runtime directory.") from exc
+
+    # Check again after creation so a redirected or replaced path is rejected.
+    if resolve_runtime_root() != runtime_root or not runtime_root.is_dir():
+        raise RuntimePathError("The runtime directory is unsafe.")
+
+    return runtime_root

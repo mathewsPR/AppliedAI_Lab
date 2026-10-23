@@ -43,6 +43,5 @@ The loader rejects malformed files, missing or extra settings, and attempts to
 enable unavailable behavior. The CLI does not load configuration yet; operational
 startup will be added later in Phase 1. Do not put credentials in this file.
 
-`resolve_runtime_root()` validates the location
-`%LOCALAPPDATA%\MailJiraAgent\` and rejects a redirected runtime directory.
-It does not create directories yet; the CLI does not use it yet.
+`initialize_runtime_root()` creates the directory and revalidates it afterward.
+The CLI does not invoke it yet, and account ACL protection has not been verified.
