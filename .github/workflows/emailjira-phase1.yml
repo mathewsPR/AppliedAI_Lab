@@ -1,0 +1,46 @@
+name: EmailJira Phase 1
+
+on:
+  pull_request:
+    paths:
+      - "EmailJira_agent/**"
+      - ".github/workflows/emailjira-phase1.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        working-directory: EmailJira_agent
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.13.1"
+
+      - name: Install Python 3.12.14
+        run: uv python install 3.12.14
+
+      - name: Install locked dependencies
+        run: uv sync --locked
+
+      - name: Check formatting
+        run: uv run --locked ruff format --check src tests
+
+      - name: Lint
+        run: uv run --locked ruff check src tests
+
+      - name: Type check
+        run: uv run --locked mypy src
+
+      - name: Test with branch coverage
+        run: uv run --locked pytest -q --cov=mail_jira_agent --cov-branch --cov-report=term-missing

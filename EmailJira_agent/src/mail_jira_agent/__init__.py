@@ -1,0 +1,1 @@
+"""EmailJira application package."""
