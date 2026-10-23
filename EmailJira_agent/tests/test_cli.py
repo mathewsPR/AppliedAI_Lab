@@ -159,3 +159,34 @@ def test_init_reports_database_failure_without_success(tmp_path: Path) -> None:
     assert "Cannot open the local database" in result.stderr
     assert "Foundation database initialized" not in result.stdout
     assert (runtime_root / "state.db").is_dir()
+
+
+def test_run_holds_lock_and_rejects_second_instance(tmp_path: Path) -> None:
+    runtime_root = tmp_path / "isolated-local-appdata" / "MailJiraAgent"
+    runtime_root.mkdir(parents=True)
+    (runtime_root / "config.toml").write_text(
+        '[application]\nmode = "foundation"\nsending_enabled = false\n',
+        encoding="utf-8",
+    )
+
+    environment = os.environ.copy()
+    environment["LOCALAPPDATA"] = str(runtime_root.parent)
+    process = subprocess.Popen(
+        [sys.executable, "-u", "-m", "mail_jira_agent", "run"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=environment,
+    )
+    try:
+        assert process.stdout is not None
+        assert "Foundation ready" in process.stdout.readline()
+
+        second = run_cli(["init"], runtime_root.parent)
+        assert second.returncode != 0
+        assert "Cannot acquire the instance lock" in second.stderr
+        assert "initialized" not in second.stdout
+    finally:
+        if process.poll() is None:
+            process.kill()
+        process.communicate(timeout=5)

@@ -78,3 +78,26 @@ uv run --locked mail-jira-agent init
 Successful initialization creates `state.db` and an `instance.lock` file under
 `%LOCALAPPDATA%\MailJiraAgent\`. Repeating `init` is safe. Gmail, Jira, Ollama,
 and sending are unavailable at this stage.
+
+To hold the foundation open, run:
+
+```bash
+uv run --locked mail-jira-agent run
+
+
+Use an outer four-backtick fence if you’re copying this whole Markdown passage into another Markdown document.
+
+Then review and commit:
+
+```bash
+uv run --locked ruff format --check src tests
+uv run --locked ruff check src tests
+uv run --locked mypy src
+uv run --locked pytest -q
+git diff --check
+
+git add -- README.md src/mail_jira_agent/__main__.py tests/test_cli.py
+git diff --cached --check
+git diff --cached --name-only
+git commit -m "feat(emailjira): run foundation with exclusive ownership"
+git status --short --branch
