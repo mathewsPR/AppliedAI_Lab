@@ -1,5 +1,6 @@
 """Tests for the public command-line interface."""
 
+import json
 import os
 import runpy
 import subprocess
@@ -190,3 +191,24 @@ def test_run_holds_lock_and_rejects_second_instance(tmp_path: Path) -> None:
         if process.poll() is None:
             process.kill()
         process.communicate(timeout=5)
+
+
+def test_init_writes_sanitized_operational_event(tmp_path: Path) -> None:
+    runtime_root = tmp_path / "isolated-local-appdata" / "MailJiraAgent"
+    runtime_root.mkdir(parents=True)
+    (runtime_root / "config.toml").write_text(
+        '[application]\nmode = "foundation"\nsending_enabled = false\n',
+        encoding="utf-8",
+    )
+
+    result = run_cli(["init"], runtime_root.parent)
+
+    assert result.returncode == 0, result.stderr
+    lines = (runtime_root / "events.jsonl").read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 1
+    record = json.loads(lines[0])
+    assert record["operation"] == "init"
+    assert record["outcome"] == "completed"
+    assert len(record["run_id"]) == 32
+    assert record["duration_ms"] >= 0
+    assert "config.toml" not in lines[0]

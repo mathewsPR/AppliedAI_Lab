@@ -46,6 +46,12 @@ startup will be added later in Phase 1. Do not put credentials in this file.
 `initialize_runtime_root()` creates the directory and revalidates it afterward.
 The CLI does not invoke it yet, and account ACL protection has not been verified.
 
+Foundation operations append structured records to
+`%LOCALAPPDATA%\MailJiraAgent\events.jsonl`. Records contain a generated run ID,
+UTC time, operation, outcome, duration, and a fixed failure reason when needed.
+Configuration values, credentials, email content, names, and subjects are not
+log fields. A log-write failure returns a nonzero result.
+
 ## Local database foundation
 
 `open_database()` opens a SQLite connection with foreign-key enforcement.
